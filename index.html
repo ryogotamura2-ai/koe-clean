@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>koe-clean — ナレーションのノイズをまとめて除去</title>
+  <meta name="description" content="録音したナレーションのノイズを、ブラウザの中だけでまとめて除去します。音声はどこにも送信されません。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230B7A83'/%3E%3Cpath d='M6 16h3M11 11v10M16 7v18M21 11v10M26 16h0' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="wrap">
+    <header class="head">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M6 16h3M11 11v10M16 7v18M21 11v10M26 16h0"/></svg>
+        <span class="wordmark">koe-clean</span>
+      </div>
+      <p class="tagline">ナレーションのノイズを、まとめて消す。音声はこのパソコンの外に出ません。</p>
+    </header>
+
+    <section class="drop" id="drop" tabindex="0" aria-label="ファイルを追加">
+      <div class="drop-inner">
+        <svg class="drop-ico" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 30V10M16 18l8-8 8 8M10 32v6h28v-6"/></svg>
+        <p class="drop-title">録音ファイルをここにドロップ</p>
+        <p class="drop-sub">複数のファイルや、フォルダごとでも大丈夫です。WAV・MP3・M4A などに対応。</p>
+        <div class="drop-actions">
+          <label class="btn">
+            ファイルを選ぶ
+            <input type="file" id="pickFiles" multiple accept="audio/*,.m4a,.aac,.wav,.mp3,.flac,.ogg,.opus,.aif,.aiff,.caf">
+          </label>
+          <label class="btn">
+            フォルダを選ぶ
+            <input type="file" id="pickFolder" webkitdirectory>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="bar" id="bar" hidden>
+      <div class="summary">
+        <p class="sum-main" id="sumMain"></p>
+        <p class="sum-sub" id="sumSub"></p>
+        <div class="sum-track" aria-hidden="true"><div class="sum-fill" id="sumFill"></div></div>
+      </div>
+      <div class="controls">
+        <div class="strength" role="radiogroup" aria-labelledby="strengthLabel">
+          <span class="ctl-label" id="strengthLabel">効きの強さ</span>
+          <div class="seg" id="strength"></div>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn primary" id="saveAll" disabled>まとめて保存</button>
+          <button type="button" class="btn ghost" id="clearAll">一覧を空にする</button>
+        </div>
+      </div>
+      <p class="hint" id="strengthHint"></p>
+    </section>
+
+    <section class="list-wrap" aria-label="ファイルの一覧">
+      <ol class="list" id="list"></ol>
+    </section>
+
+    <footer class="foot">
+      <p>書き出しは <b>WAV・48kHz・24bit</b>、ファイル名は「元の名前_clean.wav」です。Chrome と Edge では保存先のフォルダを選んで直接書き出し、ほかのブラウザでは ZIP でダウンロードします。</p>
+      <p>ノイズ除去には <a href="https://github.com/Rikorose/DeepFilterNet" target="_blank" rel="noopener">DeepFilterNet3</a>（MIT / Apache-2.0）を使っています。処理はすべてこのブラウザの中で行い、音声をサーバーに送ることはありません。<a href="https://github.com/ryogotamura2-ai/koe-clean" target="_blank" rel="noopener">ソースコード</a> · <a href="https://github.com/ryogotamura2-ai/koe-clean/blob/main/THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener">使っている部品のライセンス</a></p>
+    </footer>
+  </main>
+
+  <template id="rowTpl">
+    <li class="row" data-status="queued">
+      <div class="r-main">
+        <p class="r-name"></p>
+        <p class="r-meta"><span class="r-dur"></span><span class="r-state"></span></p>
+        <div class="r-track" aria-hidden="true"><div class="r-fill"></div></div>
+      </div>
+      <div class="r-player">
+        <button type="button" class="icon-btn r-play" aria-label="再生" disabled>
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1.5l8 4.5-8 4.5z"/></svg>
+        </button>
+        <div class="ab" role="group" aria-label="聞く音声">
+          <button type="button" class="ab-btn" data-ab="before" aria-pressed="false" disabled>処理前</button>
+          <button type="button" class="ab-btn" data-ab="after" aria-pressed="true" disabled>処理後</button>
+        </div>
+        <input type="range" class="r-seek" min="0" max="1000" value="0" step="1" aria-label="再生位置" disabled>
+      </div>
+      <div class="r-actions">
+        <button type="button" class="btn small r-save" disabled>保存</button>
+        <button type="button" class="btn small r-retry">やり直す</button>
+        <button type="button" class="icon-btn r-remove" aria-label="一覧から外す">
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+        </button>
+      </div>
+    </li>
+  </template>
+
+  <script src="lib/wav.js"></script>
+  <script src="lib/zip.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
