@@ -1,0 +1,221 @@
+:root {
+  color-scheme: light;
+  --bg: #EEF1F4;
+  --surface: #FFFFFF;
+  --surface-2: #F5F7F9;
+  --ink: #18212B;
+  --muted: #5D6B78;
+  --line: #D5DCE3;
+  --accent: #0B7A83;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #DCEFF0;
+  --ok: #2E8B57;
+  --err: #C0392B;
+  --radius: 10px;
+  --f-body: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", "Noto Sans JP", "Meiryo", system-ui, sans-serif;
+  --f-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #0E1318;
+    --surface: #151C23;
+    --surface-2: #11171D;
+    --ink: #E4EAF0;
+    --muted: #8E9DAB;
+    --line: #26313B;
+    --accent: #39B3BD;
+    --accent-ink: #06282B;
+    --accent-soft: #143238;
+    --ok: #5CC28A;
+    --err: #F06A5F;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.7;
+}
+[hidden] { display: none !important; }
+a { color: var(--accent); }
+p { margin: 0; }
+
+.wrap {
+  max-width: 920px;
+  margin: 0 auto;
+  padding-inline: 20px;
+  padding-block: 28px 56px;
+  display: grid;
+  gap: 20px;
+}
+@media (max-width: 480px) { .wrap { padding-inline: 16px; padding-block: 20px 40px; } }
+
+/* ---- 見出し ---- */
+.head { display: grid; gap: 6px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.logo { width: 30px; height: 30px; flex: none; }
+.logo rect { fill: var(--accent); }
+.logo path { stroke: var(--accent-ink); stroke-width: 2.6; stroke-linecap: round; fill: none; }
+.wordmark { font-family: var(--f-mono); font-weight: 600; font-size: 22px; letter-spacing: 0.01em; }
+.tagline { color: var(--muted); }
+
+/* ---- ボタン ---- */
+.btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 14px/1 var(--f-body);
+  padding: 10px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.ghost { background: transparent; }
+.btn.small { padding: 7px 12px; font-size: 13px; }
+.btn:disabled { opacity: 0.45; cursor: default; border-color: var(--line); }
+.btn input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.btn:focus-visible, .icon-btn:focus-visible, .seg button:focus-visible, .ab-btn:focus-visible, .drop:focus-visible, .btn:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.icon-btn {
+  appearance: none;
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  flex: none;
+}
+.icon-btn svg { width: 12px; height: 12px; fill: currentColor; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+.icon-btn:disabled { opacity: 0.4; cursor: default; }
+.r-play:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.r-remove svg { fill: none; }
+
+/* ---- ドロップ欄 ---- */
+.drop {
+  border: 2px dashed var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 36px 20px;
+  text-align: center;
+  transition: border-color 120ms, background 120ms;
+}
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop-inner { display: grid; justify-items: center; gap: 8px; }
+.drop-ico { width: 40px; height: 40px; fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.drop-title { font-weight: 700; font-size: 18px; }
+.drop-sub { color: var(--muted); font-size: 13px; }
+.drop-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
+.has-items .drop { padding: 14px 16px; }
+.has-items .drop-inner { grid-template-columns: auto 1fr auto; justify-items: start; text-align: left; align-items: center; gap: 4px 14px; }
+.has-items .drop-ico { width: 28px; height: 28px; grid-row: span 2; }
+.has-items .drop-title { font-size: 15px; }
+.has-items .drop-actions { grid-column: 3; grid-row: 1 / span 2; margin-top: 0; }
+@media (max-width: 640px) {
+  .has-items .drop-inner { grid-template-columns: auto 1fr; }
+  .has-items .drop-actions { grid-column: 1 / -1; grid-row: auto; justify-content: flex-start; }
+}
+
+/* ---- 集計と操作 ---- */
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: grid;
+  gap: 12px;
+}
+.summary { display: grid; gap: 4px; }
+.sum-main { font-weight: 700; font-variant-numeric: tabular-nums; }
+.sum-sub { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sum-track, .r-track { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.sum-fill, .r-fill { height: 100%; width: 0%; background: var(--accent); transition: width 200ms linear; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
+.strength { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.ctl-label { font-size: 13px; color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; background: var(--surface-2); }
+.seg button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 500 13px/1 var(--f-body);
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.hint { font-size: 12px; color: var(--muted); }
+
+/* ---- 一覧 ---- */
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.row {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px 16px;
+}
+.row.playing { border-color: var(--accent); }
+.r-main { display: grid; gap: 4px; min-width: 0; }
+.r-name { font-weight: 500; overflow-wrap: anywhere; }
+.r-meta { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; font-variant-numeric: tabular-nums; }
+.r-dur { font-family: var(--f-mono); }
+.row[data-status="done"] .r-state { color: var(--ok); }
+.row[data-status="error"] .r-state { color: var(--err); }
+.row[data-status="done"] .r-track, .row[data-status="error"] .r-track { visibility: hidden; }
+.row[data-status="error"] .r-player, .row[data-status="error"] .r-save { display: none; }
+.r-player { display: flex; align-items: center; gap: 8px; }
+.ab { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; background: var(--surface-2); }
+.ab-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 500 12px/1 var(--f-body);
+  padding: 7px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.ab-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.ab-btn:disabled { opacity: 0.45; cursor: default; }
+.r-seek { width: 120px; accent-color: var(--accent); margin: 0; }
+.r-actions { display: flex; align-items: center; gap: 8px; }
+@media (max-width: 720px) {
+  .row { grid-template-columns: minmax(0, 1fr) auto; }
+  .r-player { grid-column: 1 / -1; grid-row: 2; }
+  .r-seek { flex: 1; width: auto; min-width: 0; }
+  .r-actions { grid-column: 2; grid-row: 1; }
+}
+
+/* ---- 足もと ---- */
+.foot { display: grid; gap: 8px; font-size: 12px; color: var(--muted); max-width: 46em; }
+.foot b { color: var(--ink); font-weight: 500; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sum-fill, .r-fill, .drop { transition: none; }
+}
