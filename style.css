@@ -189,6 +189,7 @@ p { margin: 0; }
 .row[data-status="error"] .r-state { color: var(--err); }
 .row[data-status="done"] .r-track, .row[data-status="error"] .r-track { visibility: hidden; }
 .row[data-status="error"] .r-player, .row[data-status="error"] .r-save { display: none; }
+.row:not([data-status="error"]) .r-retry { display: none; }
 .r-player { display: flex; align-items: center; gap: 8px; }
 .ab { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; background: var(--surface-2); }
 .ab-btn {

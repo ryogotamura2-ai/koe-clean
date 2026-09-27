@@ -6,7 +6,7 @@
   "use strict";
 
   var SR = 48000;
-  var WORKER_URL = "dfn3/worker.js";
+  var WORKER_URL = "dfn3/dfn3-worker.js";
   var STRENGTHS = [
     { id: "max", label: "最大", db: null, hint: "ノイズを消せるだけ消します（聞き比べの C と同じ）。" },
     { id: "strong", label: "強め", db: 20, hint: "ノイズを最大でも約 1/10（-20dB）までしか下げません。" },
@@ -61,10 +61,86 @@
     $("strengthHint").textContent = strengthDef().hint + " 強さはあとから変えても、処理し直さずにすぐ反映されます。";
   }
 
+  /* ================= ノイズ除去の部品（初回だけダウンロード） =================
+     実行部品（wasm）とモデルは画面側で1回だけ取り、並列に動かすワーカー全員に渡す。
+     ワーカーごとに取りに行かせると、初回は同じ 23MB を人数分ダウンロードしてしまう。
+     size は圧縮前の大きさ（配信側が gzip しても進み具合がずれないよう、ここを分母にする）。 */
+  var ASSETS = [
+    { key: "wasmBinary", url: "dfn3/vendor/ort/ort-wasm-simd-threaded.wasm", size: 14239897, loaded: 0 },
+    { key: "model", url: "dfn3/models/dfn3_stateful.onnx", size: 8576292, loaded: 0 }
+  ];
+  var assets = { promise: null, ready: false, loading: false };
+
+  function loadAssets() {
+    if (!assets.promise) {
+      assets.loading = true;
+      setTimeout(refresh, 0); // 読み込み中の表示をすぐ出す（最初のデータが届くまで待たない）
+      // 片方が失敗したら、もう片方のダウンロードも止める（やり直し時に二重に取りに行かないように）
+      var attempt = { failed: false, ctrl: typeof AbortController === "function" ? new AbortController() : null };
+      assets.promise = Promise.all(ASSETS.map(function (a) { return fetchAsset(a, attempt); })).then(function (bufs) {
+        var out = {};
+        ASSETS.forEach(function (a, i) { out[a.key] = bufs[i]; });
+        assets.ready = true;
+        assets.loading = false;
+        refresh();
+        return out;
+      });
+      assets.promise.catch(function () {
+        attempt.failed = true;
+        if (attempt.ctrl) attempt.ctrl.abort();
+        assets.promise = null; // 次に処理するときにやり直せるように
+        assets.loading = false;
+        ASSETS.forEach(function (a) { a.loaded = 0; });
+        refresh();
+      });
+    }
+    return assets.promise;
+  }
+  function fetchAsset(a, attempt) {
+    var netErr = function () {
+      throw new Error("ノイズ除去の部品を取得できませんでした。ネットワークにつながっているか確認してください");
+    };
+    return fetch(a.url, attempt.ctrl ? { signal: attempt.ctrl.signal } : undefined).then(function (res) {
+      if (!res.ok) throw new Error("ノイズ除去の部品を取得できませんでした（" + res.status + "）");
+      if (!res.body || !res.body.getReader) {
+        return res.arrayBuffer().then(function (b) {
+          if (!attempt.failed) { a.loaded = a.size; refresh(); }
+          return b;
+        }, netErr);
+      }
+      var reader = res.body.getReader();
+      var chunks = [], got = 0, lastPaint = 0;
+      function pump() {
+        return reader.read().then(function (r) {
+          if (attempt.failed) { reader.cancel().catch(function () {}); throw new Error("canceled"); }
+          if (r.done) {
+            var buf = new Uint8Array(got), o = 0;
+            chunks.forEach(function (c) { buf.set(c, o); o += c.length; });
+            a.loaded = a.size;
+            refresh();
+            return buf.buffer;
+          }
+          chunks.push(r.value);
+          got += r.value.length;
+          a.loaded = Math.min(got, a.size);
+          var now = performance.now();
+          if (now - lastPaint > 150) { lastPaint = now; refresh(); }
+          return pump();
+        }, netErr);
+      }
+      return pump();
+    }, netErr);
+  }
+  function assetProgressText() {
+    var got = 0, total = 0;
+    ASSETS.forEach(function (a) { got += a.loaded; total += a.size; });
+    return (got / 1e6).toFixed(1) + " / " + (total / 1e6).toFixed(1) + " MB";
+  }
+
   /* ================= ワーカーの並列実行 ================= */
   function poolSize() {
     var n = navigator.hardwareConcurrency || 2;
-    return Math.max(1, Math.min(4, Math.floor(n / 2)));
+    return Math.max(1, Math.min(4, n - 1));
   }
 
   function WorkerPool(size) {
@@ -73,6 +149,8 @@
     this.idle = [];
     this.queue = [];
     this.jobSeq = 0;
+    this.assets = null;
+    this.waiting = false;
   }
   WorkerPool.prototype.run = function (samples, onProgress) {
     var self = this;
@@ -92,7 +170,9 @@
     return job;
   };
   WorkerPool.prototype._spawn = function () {
-    var w = new Worker(WORKER_URL);
+    var w = new Worker(WORKER_URL, { type: "module" });
+    // 部品は複製して渡る（転送すると次のワーカーに渡せなくなるため）
+    w.postMessage({ type: "init", model: this.assets.model, wasmBinary: this.assets.wasmBinary });
     this.workers.push(w);
     return w;
   };
@@ -102,6 +182,21 @@
     this.idle = this.idle.filter(function (x) { return x !== w; });
   };
   WorkerPool.prototype._next = function () {
+    var self = this;
+    if (this.queue.length && !this.assets) {
+      if (!this.waiting) {
+        this.waiting = true;
+        loadAssets().then(function (a) {
+          self.assets = a;
+          self.waiting = false;
+          self._next();
+        }, function (err) {
+          self.waiting = false;
+          self.queue.splice(0).forEach(function (j) { j.done = true; j.reject(err); });
+        });
+      }
+      return;
+    }
     while (this.queue.length && (this.idle.length || this.workers.length < this.size)) {
       var w = this.idle.pop() || this._spawn();
       this._exec(w, this.queue.shift());
@@ -120,10 +215,19 @@
     }
     w.onmessage = function (e) {
       var m = e.data;
-      if (!m || m.id !== id || job.done) return;
+      if (!m || job.done) return;
+      if (m.type === "error" && m.id == null) {
+        // 準備（init）の失敗。このワーカーは使えないので捨てる
+        job.done = true;
+        self._kill(w);
+        job.reject(new Error(m.message || "ノイズ除去の部品を準備できませんでした"));
+        self._next();
+        return;
+      }
+      if (m.id !== id) return;
       if (m.type === "progress") {
         job.onProgress(m.value);
-      } else if (m.type === "done") {
+      } else if (m.type === "result") {
         job.done = true;
         finish();
         job.resolve(m.samples);
@@ -242,6 +346,7 @@
         abBtns: row.querySelectorAll(".ab-btn"),
         seek: row.querySelector(".r-seek"),
         save: row.querySelector(".r-save"),
+        retry: row.querySelector(".r-retry"),
         remove: row.querySelector(".r-remove")
       }
     };
@@ -259,6 +364,15 @@
       if (player.item === it) player.seek(t); else it.offset = t;
     });
     it.el.save.addEventListener("click", function () { saveOne(it); });
+    it.el.retry.addEventListener("click", function () {
+      if (it.status !== "error") return;
+      it.status = "queued";
+      it.error = null;
+      it.progress = 0;
+      it.jobs = [];
+      renderRow(it); refresh();
+      pump();
+    });
     it.el.remove.addEventListener("click", function () { removeItem(it); });
     renderRow(it);
     return it;
@@ -278,7 +392,7 @@
     switch (it.status) {
       case "queued": text = "順番待ち"; break;
       case "decoding": text = "読み込み中"; break;
-      case "processing": text = it.progress > 0 ? "ノイズ除去中 " + Math.floor(it.progress * 100) + "%" : "準備中（初回はモデルの読み込みに少しかかります）"; break;
+      case "processing": text = it.progress > 0 ? "ノイズ除去中 " + Math.floor(it.progress * 100) + "%" : "準備中"; break;
       case "done": text = it.saved ? "完了・保存済み" : "完了"; break;
       case "error": text = it.error || "失敗しました"; break;
     }
@@ -390,12 +504,17 @@
     if (cnt.error) parts.push("失敗 " + cnt.error);
     $("sumMain").textContent = main + (parts.length ? " · " + parts.join(" · ") : "");
     var sub;
-    if (active) {
+    if (active && assets.loading) {
+      sub = "ノイズ除去の部品を読み込んでいます " + assetProgressText() + "（初回のみ。次からは速く始まります）";
+    } else if (active) {
       var eta = estimate();
       sub = eta != null ? "残り 約" + fmtEta(eta) + "（目安）" : "処理しています。このタブは開いたままにしてください";
     } else if (cnt.done) {
       var unsaved = items.filter(function (it) { return it.status === "done" && !it.saved; }).length;
       sub = unsaved ? "すべて終わりました。「まとめて保存」で書き出せます" : "すべて保存しました";
+      if (cnt.error) sub += "。失敗したものは「やり直す」で再挑戦できます";
+    } else if (cnt.error) {
+      sub = "失敗したものは「やり直す」で再挑戦できます";
     } else {
       sub = "";
     }
